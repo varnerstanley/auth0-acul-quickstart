@@ -144,34 +144,38 @@ auth0 test login
 
 # Part 2 — What the CLI generated
 
-The CLI produces a complete Vite + React project. **The parts you'll actually
-touch are marked ←.**
+The CLI produces a complete Vite + React project. **`←` marks what you actually
+edit to brand a screen** — in practice: the form, the header, the footer, the
+social buttons, and the copy. Everything else is either SDK wiring (leave it
+alone) or dev-only scaffolding.
 
 ```
 my-acul-app/
-├── public/
-│   ├── manifest.json                     # Screen registry for the local inspector
+├── public/                               #   Dev-only. Not an editing target.
+│   ├── manifest.json                     #   Screen registry for the local inspector
 │   └── screens/
-│       └── signup/
-│           └── signup-id/
-│               └── default.json          # ← Mock context data (you'll edit this)
+│       └── login-id/
+│           └── login-id/
+│               ├── default.json          #   Mock context — a fake Auth0 payload
+│               └── with-errors.json      #   Another mock state to preview against
 ├── src/
-│   ├── components/                       # Pre-built Universal Login theme components
+│   ├── components/                       #   Pre-built Universal Login theme components
 │   │   ├── ULThemeCountryCodePicker.tsx  #   Country code button
 │   │   ├── ULThemeSocialProviderButton.tsx #  Social login button
 │   │   └── ...
 │   └── screens/
-│       └── signup-id/
-│           ├── index.tsx                 # ← Screen root (you'll edit this)
+│       └── login-id/
+│           ├── index.tsx                 # ← Screen root: layout + composition
 │           ├── components/
-│           │   ├── AlternativeLogins.tsx # ← Social buttons (you'll edit this)
-│           │   ├── SignupIdForm.tsx      # ← Identifier form (you'll edit this)
-│           │   ├── Header.tsx
-│           │   └── Footer.tsx
+│           │   ├── LoginIdForm.tsx       # ← The form
+│           │   ├── Header.tsx            # ← Logo / title
+│           │   ├── Footer.tsx            # ← Links / legal
+│           │   └── AlternativeLogins.tsx # ← Social + passkey buttons
 │           ├── hooks/
-│           │   └── useSignupIdManager.ts #   SDK hook wrapper
-│           └── locales/
-│               └── en.json               #   UI strings
+│           │   └── useLoginIdManager.ts  #   SDK wrapper — DON'T rewrite the auth logic
+│           ├── locales/
+│           │   └── en.json               # ← UI strings (change copy here, not in JSX)
+│           └── __tests__/                #   Screen tests
 ├── package.json
 └── vite.config.ts
 ```
@@ -180,12 +184,18 @@ my-acul-app/
 
 | Piece | What it is | Rule of thumb |
 |---|---|---|
-| `screens/<screen>/index.tsx` | The screen root — layout and composition. | **Style freely.** |
-| `screens/<screen>/components/*` | The form, social buttons, header/footer. | Style freely; keep the SDK calls. |
-| `screens/<screen>/hooks/use*Manager.ts` | Thin wrapper over the ACUL SDK. | **Don't rewrite the auth logic.** |
+| `screens/<screen>/components/*.tsx` | The form, header, footer, social buttons. | **This is where branding lives.** Restyle freely; keep the SDK calls. |
+| `screens/<screen>/index.tsx` | The screen root — layout and composition. | Edit when you're changing the *layout*, not just styling. |
 | `screens/<screen>/locales/en.json` | UI strings. | Override copy here, not in JSX. |
+| `screens/<screen>/hooks/use*Manager.ts` | Thin wrapper over the ACUL SDK. | **Don't rewrite the auth logic.** |
 | `components/ULTheme*` | Shared themeable primitives. | Reuse before building new. |
-| `public/screens/**/*.json` | Mock context for local dev. | Dev-only; never shipped. |
+| `public/screens/**/*.json` | Mock context — a stand-in for the real `window.universal_login_context`. | **Leave it alone.** Dev-only fixture; Auth0 injects the real one in production. |
+
+> **On `public/screens/**/*.json`:** these ship with the CLI template and exist
+> only so `auth0 acul dev` can render a screen locally without a tenant. Branding
+> a screen does **not** involve touching them. The one exception is the
+> multi-brand setup below, where you *add* extra variants alongside `default.json`
+> to preview each brand — you still don't edit `default.json` itself.
 
 ### The golden rule
 
@@ -212,6 +222,23 @@ window.universal_login_context.client.id  →  resolveBrand(clientId)  →  them
 Keep each brand as a plain config object (colors, logo, layout, copy) and keep
 the screens brand-agnostic. Inject client IDs at **build time** via env vars so
 they never live in source.
+
+This is also the **only** reason to go near `public/screens/`. To preview each
+brand locally you *add* variants next to the stock mocks — one per brand, each a
+copy of `default.json` with `client.id` swapped — and register them in
+`manifest.json`. The stock files stay untouched:
+
+```
+public/screens/login-id/login-id/
+├── default.json        #   stock — leave alone
+├── with-errors.json    #   stock — leave alone
+├── brand-a.json        # + yours: same payload, client.id = brand A
+└── brand-b.json        # + yours: same payload, client.id = brand B
+```
+
+The inspector's **Variant** dropdown then previews each brand. This is dev-only
+convenience — in production Auth0 supplies the real `client.id` and
+`resolveBrand()` does the rest.
 
 ---
 

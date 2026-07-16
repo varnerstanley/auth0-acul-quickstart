@@ -1,0 +1,128 @@
+# ---------------------------------------------------------------------------
+# SAMPLE deploy pipeline — build → S3 → point Auth0 at the CDN.
+#
+# Rename to `acul-deploy.yml` to activate, and adapt the screen list.
+# Requires the GitHub secrets listed in the repo README (Part 4).
+#
+# NOT FOR PRODUCTION as-is: add environment protection rules, a manual approval
+# gate, and pin third-party actions to a commit SHA before real use.
+# ---------------------------------------------------------------------------
+name: ACUL Deploy
+
+on:
+  push:
+    branches: [main]
+    # Docs-only commits don't need a deploy.
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - ".gitignore"
+  workflow_dispatch:
+
+# Least privilege: `id-token` is what enables OIDC into AWS. No AWS keys.
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: acul-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & deploy ACUL screens
+    runs-on: ubuntu-latest
+
+    # The screens to configure. Match these to the ones you generated.
+    env:
+      SCREENS: "login-id login-password signup-id"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          # Public, build-time config only — never secrets.
+          # Client IDs are not sensitive, but keep them out of source.
+          VITE_APP_CLIENT_ID: ${{ vars.VITE_APP_CLIENT_ID }}
+
+      # Short-lived credentials via OIDC — no long-lived keys stored in GitHub.
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_S3_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Upload assets to S3
+        run: |
+          set -euo pipefail
+          # Content-hashed files → immutable, long cache.
+          aws s3 sync dist/ "s3://${{ secrets.S3_BUCKET_NAME }}/" \
+            --delete \
+            --cache-control "public,max-age=31536000,immutable"
+
+      - name: Install Auth0 CLI
+        run: |
+          set -euo pipefail
+          curl -sSfL https://raw.githubusercontent.com/auth0/auth0-cli/main/install.sh | sh -s -- -b "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Auth0 CLI login (machine-to-machine)
+        env:
+          AUTH0_DOMAIN: ${{ secrets.AUTH0_DOMAIN }}
+          AUTH0_CLIENT_ID: ${{ secrets.AUTH0_CLIENT_ID }}
+          AUTH0_CLIENT_SECRET: ${{ secrets.AUTH0_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          auth0 login \
+            --domain "$AUTH0_DOMAIN" \
+            --client-id "$AUTH0_CLIENT_ID" \
+            --client-secret "$AUTH0_CLIENT_SECRET"
+
+      - name: Configure advanced rendering for each screen
+        env:
+          CDN_URL: ${{ secrets.S3_CDN_URL }}
+          RENDERING_CLIENT_IDS: ${{ secrets.RENDERING_CLIENT_IDS }}
+        run: |
+          set -euo pipefail
+
+          for SCREEN in $SCREENS; do
+            echo "::group::Configuring $SCREEN"
+
+            # head_tags point Universal Login at your CDN. Order matters:
+            # CSS first, then shared chunks, then the screen entry.
+            HEAD_TAGS=$(jq -n --arg cdn "$CDN_URL" --arg screen "$SCREEN" '[
+              { tag: "link",   attributes: { rel: "stylesheet", href: ($cdn + "/assets/style.css") } },
+              { tag: "script", attributes: { src: ($cdn + "/assets/" + $screen + "/index.js"), type: "module" } }
+            ]')
+
+            # Optionally scope advanced rendering to specific applications, so a
+            # bad deploy can't affect every login in the tenant.
+            FILTERS='null'
+            if [ -n "${RENDERING_CLIENT_IDS:-}" ]; then
+              FILTERS=$(jq -n --arg ids "$RENDERING_CLIENT_IDS" '{
+                match_type: "includes_any",
+                clients: ($ids | split(",") | map({ id: (. | gsub("^\\s+|\\s+$";"")) }))
+              }')
+            fi
+
+            jq -n \
+              --argjson head_tags "$HEAD_TAGS" \
+              --argjson filters "$FILTERS" \
+              '{ rendering_mode: "advanced", use_page_template: false, head_tags: $head_tags }
+               + (if $filters == null then {} else { filters: $filters } end)' \
+              > "settings-$SCREEN.json"
+
+            auth0 acul config set "$SCREEN" --file "settings-$SCREEN.json"
+            echo "✅ configured $SCREEN"
+            echo "::endgroup::"
+          done

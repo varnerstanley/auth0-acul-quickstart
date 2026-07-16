@@ -1,0 +1,60 @@
+# ---------------------------------------------------------------------------
+# Secrets & local config — NEVER commit these.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+credentials
+secrets.json
+
+# ---------------------------------------------------------------------------
+# Terraform
+# State files contain a full record of your infrastructure and can include
+# sensitive values in plain text. Never commit them — use a remote backend.
+# tfvars hold your real bucket names / repo / origins — only the .example is
+# committed.
+# ---------------------------------------------------------------------------
+**/.terraform/
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+.terraform.lock.hcl
+tfplan
+*.tfplan
+
+# ---------------------------------------------------------------------------
+# Node / build output
+# ---------------------------------------------------------------------------
+node_modules/
+dist/
+build/
+.vite/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ---------------------------------------------------------------------------
+# Editor / OS
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

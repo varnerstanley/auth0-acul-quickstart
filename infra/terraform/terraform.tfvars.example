@@ -1,0 +1,41 @@
+# ---------------------------------------------------------------------------
+# SAMPLE VALUES — copy to terraform.tfvars and replace every placeholder.
+#
+#   cp terraform.tfvars.example terraform.tfvars
+#
+# terraform.tfvars is git-ignored. Never commit real values.
+# Nothing here is secret (no keys/tokens belong in this file at all) — the
+# Auth0 M2M client secret and AWS credentials go in GitHub Secrets and your
+# local AWS profile respectively.
+# ---------------------------------------------------------------------------
+
+aws_region = "us-east-1"
+
+# Must be globally unique across all of AWS. Pick your own.
+bucket_name = "acul-assets-CHANGE-ME-12345"
+
+# Origins allowed to load the assets cross-origin — your Universal Login domains.
+# Include BOTH the custom domain AND the tenant canonical domain.
+# https://, no trailing slash, never "*".
+allowed_origins = [
+  "https://login.example.com",          # ← your Auth0 custom domain
+  "https://YOUR-TENANT.us.auth0.com",   # ← your tenant canonical domain
+]
+
+# The GitHub repo allowed to assume the deploy role via OIDC (owner/name).
+# Be exact — this is a security boundary, not a convenience setting.
+github_repo = "your-org/your-acul-repo"
+
+# Which git ref may assume the role. Keep this narrow.
+# github_ref_condition = "ref:refs/heads/main"
+
+# The GitHub OIDC provider is account-wide. If one already exists in this AWS
+# account, set this to false to reuse it instead of failing on create.
+create_github_oidc_provider = true
+
+# Optional
+# cloudfront_price_class = "PriceClass_100"
+# tags = {
+#   Project = "acul-quickstart"
+#   Owner   = "platform-team"
+# }

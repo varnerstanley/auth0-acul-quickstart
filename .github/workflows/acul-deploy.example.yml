@@ -50,10 +50,6 @@ jobs:
 
       - name: Build
         run: npm run build
-        env:
-          # Public, build-time config only — never secrets.
-          # Client IDs are not sensitive, but keep them out of source.
-          VITE_APP_CLIENT_ID: ${{ vars.VITE_APP_CLIENT_ID }}
 
       # Short-lived credentials via OIDC — no long-lived keys stored in GitHub.
       - name: Configure AWS credentials (OIDC)

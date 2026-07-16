@@ -145,7 +145,7 @@ auth0 test login
 # Part 2 — What the CLI generated
 
 The CLI produces a complete Vite + React project. **`←` marks what you actually
-edit to brand a screen** — in practice: the form, the header, the footer, the
+edit to customize a screen** — in practice: the form, the header, the footer, the
 social buttons, and the copy. Everything else is either SDK wiring (leave it
 alone) or dev-only scaffolding.
 
@@ -184,7 +184,7 @@ my-acul-app/
 
 | Piece | What it is | Rule of thumb |
 |---|---|---|
-| `screens/<screen>/components/*.tsx` | The form, header, footer, social buttons. | **This is where branding lives.** Restyle freely; keep the SDK calls. |
+| `screens/<screen>/components/*.tsx` | The form, header, footer, social buttons. | **This is where your customization lives.** Restyle freely; keep the SDK calls. |
 | `screens/<screen>/index.tsx` | The screen root — layout and composition. | Edit when you're changing the *layout*, not just styling. |
 | `screens/<screen>/locales/en.json` | UI strings. | Override copy here, not in JSX. |
 | `screens/<screen>/hooks/use*Manager.ts` | Thin wrapper over the ACUL SDK. | **Don't rewrite the auth logic.** |
@@ -192,14 +192,12 @@ my-acul-app/
 | `public/screens/**/*.json` | Mock context — a stand-in for the real `window.universal_login_context`. | **Leave it alone.** Dev-only fixture; Auth0 injects the real one in production. |
 
 > **On `public/screens/**/*.json`:** these ship with the CLI template and exist
-> only so `auth0 acul dev` can render a screen locally without a tenant. Branding
-> a screen does **not** involve touching them. The one exception is the
-> multi-brand setup below, where you *add* extra variants alongside `default.json`
-> to preview each brand — you still don't edit `default.json` itself.
+> only so `auth0 acul dev` can render a screen locally without a tenant.
+> Customizing a screen does **not** involve touching them.
 
 ### The golden rule
 
-**Brand the presentation; never touch the SDK wiring.** Calls like `login()`,
+**Change the presentation; don't rewrite the SDK wiring.** Calls like `login()`,
 `signup()`, `federatedLogin()`, `passkeyLogin()`, and `changeLanguage()` — plus
 anything driven by `transaction.alternateConnections` — are what make the screen
 a real, secure login. Restyle around them.
@@ -207,38 +205,6 @@ a real, secure login. Restyle around them.
 The SDK is dynamic on purpose: which social providers appear, whether passkeys
 show, which identifiers are allowed — all come from the **tenant**, at runtime.
 Read them from the context; don't hardcode them.
-
-### Optional: one bundle, many brands
-
-Auth0 allows **one rendering configuration per screen, per tenant** — `filters`
-choose *which applications* get it, but you can't point different apps at
-different bundles for the same screen. So if you need several looks, the pattern
-is **one bundle that switches at runtime**:
-
-```
-window.universal_login_context.client.id  →  resolveBrand(clientId)  →  theme/config
-```
-
-Keep each brand as a plain config object (colors, logo, layout, copy) and keep
-the screens brand-agnostic. Inject client IDs at **build time** via env vars so
-they never live in source.
-
-This is also the **only** reason to go near `public/screens/`. To preview each
-brand locally you *add* variants next to the stock mocks — one per brand, each a
-copy of `default.json` with `client.id` swapped — and register them in
-`manifest.json`. The stock files stay untouched:
-
-```
-public/screens/login-id/login-id/
-├── default.json        #   stock — leave alone
-├── with-errors.json    #   stock — leave alone
-├── brand-a.json        # + yours: same payload, client.id = brand A
-└── brand-b.json        # + yours: same payload, client.id = brand B
-```
-
-The inspector's **Variant** dropdown then previews each brand. This is dev-only
-convenience — in production Auth0 supplies the real `client.id` and
-`resolveBrand()` does the rest.
 
 ---
 

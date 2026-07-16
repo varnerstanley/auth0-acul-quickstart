@@ -123,7 +123,7 @@ This is the fast loop — edit code, see it instantly, no Auth0 round trip.
 ### Develop connected to your tenant
 
 ```bash
-auth0 acul dev --connected --screens login-id
+auth0 acul dev --connected (optional: --screens login-id)
 ```
 
 Points your **real tenant's** screen at your local build so you can test the

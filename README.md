@@ -213,6 +213,11 @@ Read them from the context; don't hardcode them.
 The sample lives in [`infra/terraform/`](infra/terraform/) — see its
 [README](infra/terraform/README.md) for the full resource-by-resource breakdown.
 
+> **Prefer a narrated, copy‑paste walkthrough?** See
+> [Ship your ACUL login to AWS with Terraform](docs/deploy-acul-to-aws-with-terraform.md)
+> — a blog‑style quick start: copy the folder, change three values, `terraform
+> apply`, hand the outputs to CI.
+
 It creates:
 
 - **S3 bucket** — private, versioned, encrypted, all public access blocked.

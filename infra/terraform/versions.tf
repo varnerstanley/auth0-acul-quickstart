@@ -31,3 +31,14 @@ provider "aws" {
     tags = var.tags
   }
 }
+
+# CLOUDFRONT-scoped WAFv2 web ACLs must be created in us-east-1, regardless of
+# var.aws_region. Used only when var.enable_waf is true.
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+
+  default_tags {
+    tags = var.tags
+  }
+}

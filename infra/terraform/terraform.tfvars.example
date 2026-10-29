@@ -39,3 +39,13 @@ create_github_oidc_provider = true
 #   Project = "acul-quickstart"
 #   Owner   = "platform-team"
 # }
+
+# ---------------------------------------------------------------------------
+# Optional production hardening — all off by default. Flip on when ready.
+# (Remote state is enabled separately; see backend.tf.example.)
+# ---------------------------------------------------------------------------
+# enable_waf         = true            # WAFv2: rate limit + AWS managed rules
+# waf_rate_limit     = 2000            # requests / 5 min / IP before blocking
+# enable_access_logs = true            # CloudFront logs → private log bucket
+# log_retention_days = 90
+# github_role_permissions_boundary = "arn:aws:iam::<account-id>:policy/<boundary>"

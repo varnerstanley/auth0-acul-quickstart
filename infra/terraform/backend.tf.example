@@ -1,0 +1,38 @@
+# ---------------------------------------------------------------------------
+# REMOTE STATE (recommended for any shared / long-lived use)
+#
+# By default Terraform keeps state in a local `terraform.tfstate` file — fine
+# for a solo experiment, but it can contain sensitive values in plain text and
+# can't be shared or locked. For a team, store it in S3 with locking.
+#
+# To enable:
+#   1. Create a private, versioned, encrypted state bucket ONCE (it can't be
+#      the same bucket this config manages — chicken/egg). For example:
+#
+#        aws s3api create-bucket --bucket your-tf-state-bucket --region us-east-1
+#        aws s3api put-bucket-versioning --bucket your-tf-state-bucket \
+#          --versioning-configuration Status=Enabled
+#        aws s3api put-bucket-encryption --bucket your-tf-state-bucket \
+#          --server-side-encryption-configuration \
+#          '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+#        aws s3api put-public-access-block --bucket your-tf-state-bucket \
+#          --public-access-block-configuration \
+#          BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+#
+#   2. Copy this file to `backend.tf`, fill in the bucket, and run:
+#        terraform init -migrate-state
+#
+# `use_lockfile = true` uses S3-native state locking (Terraform >= 1.10) — no
+# DynamoDB table required. On older Terraform, set `dynamodb_table` instead.
+# ---------------------------------------------------------------------------
+
+terraform {
+  backend "s3" {
+    bucket       = "your-tf-state-bucket"   # the state bucket from step 1
+    key          = "acul/terraform.tfstate" # path within the bucket
+    region       = "us-east-1"
+    encrypt      = true
+    use_lockfile = true # S3-native locking (Terraform >= 1.10)
+    # dynamodb_table = "your-tf-locks"       # older Terraform instead of use_lockfile
+  }
+}

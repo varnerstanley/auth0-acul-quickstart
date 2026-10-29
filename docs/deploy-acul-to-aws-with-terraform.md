@@ -207,6 +207,76 @@ a separate environment.)
 
 ---
 
+## Level up: production hardening (one flag at a time)
+
+The quick start above is deliberately minimal. Everything here is **off by
+default** so the happy path stays simple — turn each on in `terraform.tfvars`
+(or `backend.tf`) and `terraform apply` again.
+
+### Put a WAF in front of CloudFront
+
+```hcl
+enable_waf     = true
+waf_rate_limit = 2000   # requests / 5 min / IP before blocking
+```
+
+Attaches a WAFv2 web ACL: a per‑IP rate limit plus the AWS managed **Common** and
+**Known Bad Inputs** rule groups. CLOUDFRONT‑scoped ACLs must live in us‑east‑1 —
+the config does that for you with a second provider alias.
+
+### Turn on access logs
+
+```hcl
+enable_access_logs = true
+log_retention_days = 90
+```
+
+Delivers CloudFront access logs to a **private, encrypted** log bucket that
+auto‑expires them — useful for debugging a bad deploy or an audit trail.
+
+### Move state off your laptop
+
+Local `terraform.tfstate` is fine for a solo experiment, but it holds a full
+record of your infrastructure (and can contain sensitive values) — never commit
+it, and for anything shared, put it in S3 with locking. Create a state bucket
+once (commands are in [`backend.tf.example`](../infra/terraform/backend.tf.example)),
+then:
+
+```bash
+cp backend.tf.example backend.tf     # fill in your state bucket name
+terraform init -migrate-state
+```
+
+`use_lockfile = true` gives you **S3‑native state locking** on Terraform ≥ 1.10 —
+no DynamoDB table to manage.
+
+### Cap the deploy role
+
+```hcl
+github_role_permissions_boundary = "arn:aws:iam::<account-id>:policy/<boundary>"
+```
+
+Adds an IAM **permissions boundary** so the CI role can never exceed it, even if
+its policy is later widened — defense in depth for your most privileged
+automation.
+
+### Gate the deploy itself
+
+On the CI side, the sample workflow runs in a GitHub **`environment: production`**.
+Add required reviewers (Settings → Environments) and keep the `AUTH0_*` secrets in
+that environment — so a deploy needs a human approval and only approved runs can
+read the credentials. The workflow also pins its actions to commit SHAs and the
+Auth0 CLI to a fixed version (supply‑chain hygiene).
+
+### What's still on you
+
+A dedicated deploy account, SCPs / AWS Config / drift detection, cost‑allocation
+tags, and a custom CDN domain + ACM cert if you don't want the
+`*.cloudfront.net` URL. This repo gets you a **secure, working baseline** — not a
+finished platform.
+
+---
+
 ## Tear it down
 
 ```bash

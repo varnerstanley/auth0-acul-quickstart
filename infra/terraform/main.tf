@@ -141,6 +141,10 @@ resource "aws_cloudfront_distribution" "assets" {
   price_class  = var.cloudfront_price_class
   http_version = "http2and3"
 
+  # Optional WAFv2 web ACL (var.enable_waf). CLOUDFRONT-scoped ACLs live in
+  # us-east-1; this references its ARN regardless of var.aws_region.
+  web_acl_id = var.enable_waf ? aws_wafv2_web_acl.cdn[0].arn : null
+
   origin {
     domain_name              = aws_s3_bucket.assets.bucket_regional_domain_name
     origin_id                = "s3-${aws_s3_bucket.assets.id}"
@@ -157,6 +161,16 @@ resource "aws_cloudfront_distribution" "assets" {
     response_headers_policy_id = aws_cloudfront_response_headers_policy.cors.id
   }
 
+  # Optional access logging to a private log bucket (var.enable_access_logs).
+  dynamic "logging_config" {
+    for_each = var.enable_access_logs ? [1] : []
+    content {
+      bucket          = aws_s3_bucket.logs[0].bucket_domain_name
+      prefix          = "cloudfront/"
+      include_cookies = false
+    }
+  }
+
   restrictions {
     geo_restriction {
       restriction_type = "none"
@@ -168,10 +182,171 @@ resource "aws_cloudfront_distribution" "assets" {
   viewer_certificate {
     cloudfront_default_certificate = true
   }
+}
 
-  # SAMPLE: consider enabling access logging + WAF for production.
-  # logging_config { bucket = "...", prefix = "cloudfront/" }
-  # web_acl_id = "..."
+##############################################################################
+# OPTIONAL — production hardening, all off by default so the quick start stays
+# simple. Flip the toggles in terraform.tfvars to enable.
+##############################################################################
+
+# --- WAFv2 web ACL (var.enable_waf): rate limiting + AWS managed rule groups --
+# CLOUDFRONT scope requires the us-east-1 provider.
+resource "aws_wafv2_web_acl" "cdn" {
+  count    = var.enable_waf ? 1 : 0
+  provider = aws.us_east_1
+
+  name        = "${var.bucket_name}-acul"
+  description = "Managed protections for the ACUL CDN"
+  scope       = "CLOUDFRONT"
+
+  default_action {
+    allow {}
+  }
+
+  # Per-IP rate limit (requests per 5-minute window).
+  rule {
+    name     = "rate-limit"
+    priority = 1
+    action {
+      block {}
+    }
+    statement {
+      rate_based_statement {
+        limit              = var.waf_rate_limit
+        aggregate_key_type = "IP"
+      }
+    }
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${var.bucket_name}-rate"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # AWS managed baseline rules.
+  rule {
+    name     = "aws-common"
+    priority = 2
+    override_action {
+      none {}
+    }
+    statement {
+      managed_rule_group_statement {
+        vendor_name = "AWS"
+        name        = "AWSManagedRulesCommonRuleSet"
+      }
+    }
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${var.bucket_name}-common"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  rule {
+    name     = "aws-bad-inputs"
+    priority = 3
+    override_action {
+      none {}
+    }
+    statement {
+      managed_rule_group_statement {
+        vendor_name = "AWS"
+        name        = "AWSManagedRulesKnownBadInputsRuleSet"
+      }
+    }
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${var.bucket_name}-bad-inputs"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "${var.bucket_name}-acul"
+    sampled_requests_enabled   = true
+  }
+}
+
+# --- CloudFront access logs (var.enable_access_logs) → private log bucket ------
+data "aws_canonical_user_id" "current" {
+  count = var.enable_access_logs ? 1 : 0
+}
+
+resource "aws_s3_bucket" "logs" {
+  count  = var.enable_access_logs ? 1 : 0
+  bucket = "${var.bucket_name}-logs"
+}
+
+# CloudFront standard logging delivers via ACLs, so this bucket (unlike the
+# asset bucket) allows bucket-owner-preferred ownership + a delivery grant.
+resource "aws_s3_bucket_ownership_controls" "logs" {
+  count  = var.enable_access_logs ? 1 : 0
+  bucket = aws_s3_bucket.logs[0].id
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "logs" {
+  count                   = var.enable_access_logs ? 1 : 0
+  bucket                  = aws_s3_bucket.logs[0].id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
+  count  = var.enable_access_logs ? 1 : 0
+  bucket = aws_s3_bucket.logs[0].id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "logs" {
+  count  = var.enable_access_logs ? 1 : 0
+  bucket = aws_s3_bucket.logs[0].id
+  rule {
+    id     = "expire-logs"
+    status = "Enabled"
+    filter {}
+    expiration {
+      days = var.log_retention_days
+    }
+  }
+}
+
+# Grant the CloudFront log-delivery account write access (well-known canonical
+# user id, the same for all AWS accounts).
+resource "aws_s3_bucket_acl" "logs" {
+  count      = var.enable_access_logs ? 1 : 0
+  depends_on = [aws_s3_bucket_ownership_controls.logs]
+  bucket     = aws_s3_bucket.logs[0].id
+
+  access_control_policy {
+    owner {
+      id = data.aws_canonical_user_id.current[0].id
+    }
+    grant {
+      grantee {
+        type = "CanonicalUser"
+        id   = "c4c1ede66af53448b93c283ce9448c4ba468c9432aa01d700d3878632f77d2d0"
+      }
+      permission = "FULL_CONTROL"
+    }
+    grant {
+      grantee {
+        type = "CanonicalUser"
+        id   = data.aws_canonical_user_id.current[0].id
+      }
+      permission = "FULL_CONTROL"
+    }
+  }
 }
 
 # Bucket policy: only THIS CloudFront distribution may read objects.
@@ -277,6 +452,8 @@ resource "aws_iam_role" "github_actions" {
   description          = "Least-privilege role for GitHub Actions to sync the ACUL bundle to S3"
   assume_role_policy   = data.aws_iam_policy_document.github_assume.json
   max_session_duration = 3600
+  # Optional defense-in-depth cap on what this role can ever do.
+  permissions_boundary = var.github_role_permissions_boundary
 }
 
 # Least privilege: object-level writes to this one bucket. Nothing else.

@@ -26,6 +26,16 @@ output "distribution_id" {
   value       = aws_cloudfront_distribution.assets.id
 }
 
+output "waf_web_acl_arn" {
+  description = "WAFv2 web ACL ARN (null unless enable_waf)."
+  value       = var.enable_waf ? aws_wafv2_web_acl.cdn[0].arn : null
+}
+
+output "access_logs_bucket" {
+  description = "CloudFront access-log bucket (null unless enable_access_logs)."
+  value       = var.enable_access_logs ? aws_s3_bucket.logs[0].id : null
+}
+
 output "next_steps" {
   description = "Reminder of what to do with these outputs."
   value       = <<-EOT

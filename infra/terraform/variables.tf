@@ -103,3 +103,38 @@ variable "tags" {
     Note    = "sample-not-for-production"
   }
 }
+
+# ---------------------------------------------------------------------------
+# Optional production hardening — all off by default so the quick start stays
+# simple. Flip these on in terraform.tfvars when you're ready.
+# ---------------------------------------------------------------------------
+
+variable "enable_waf" {
+  description = "Attach an AWS WAFv2 web ACL (rate limit + AWS managed rule groups) to CloudFront. Adds cost."
+  type        = bool
+  default     = false
+}
+
+variable "waf_rate_limit" {
+  description = "Requests per 5-minute window, per IP, before WAF blocks (when enable_waf)."
+  type        = number
+  default     = 2000
+}
+
+variable "enable_access_logs" {
+  description = "Deliver CloudFront access logs to a private, encrypted log bucket."
+  type        = bool
+  default     = false
+}
+
+variable "log_retention_days" {
+  description = "Days to keep CloudFront access logs before expiry (when enable_access_logs)."
+  type        = number
+  default     = 90
+}
+
+variable "github_role_permissions_boundary" {
+  description = "Optional IAM permissions-boundary ARN to cap the GitHub deploy role (defense in depth). null = none."
+  type        = string
+  default     = null
+}

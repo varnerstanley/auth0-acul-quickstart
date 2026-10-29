@@ -92,13 +92,30 @@ yourself — they must never appear in this repo.
   `s3:*`, no `Resource: "*"`.
 - **TLS enforced** at the bucket policy (`aws:SecureTransport`) and viewer
   (`redirect-to-https`).
-- **State is sensitive.** `*.tfstate` is git-ignored. Use the S3 backend stub in
-  `versions.tf` (encrypted + DynamoDB lock) for shared use.
+- **Noncurrent versions expire** after 30 days (lifecycle rule), so the versioned
+  bucket doesn't grow forever.
+- **State is sensitive.** `*.tfstate` is git-ignored. Enable remote state with
+  locking — see `backend.tf.example`.
 
-## Before you'd call this production-ready
+## Production hardening (opt-in toggles)
 
-- Remote state with encryption + locking (stub in `versions.tf`).
-- CloudFront access logging and/or WAF (commented stubs in `main.tf`).
-- A dedicated deploy account/role separation and an approval gate on `apply`.
-- Tag/cost allocation and lifecycle rules for old object versions.
-- Your org's guardrails: SCPs, Config rules, drift detection.
+These are **off by default** so the quick start stays simple. Flip them on in
+`terraform.tfvars` when you're ready:
+
+| Toggle | What it adds |
+|---|---|
+| `enable_waf = true` | A **WAFv2 web ACL** on CloudFront — per-IP rate limit (`waf_rate_limit`) plus the AWS managed *Common* and *Known Bad Inputs* rule groups. (CLOUDFRONT scope is created in us-east-1 automatically.) |
+| `enable_access_logs = true` | **CloudFront access logs** to a private, encrypted, auto-expiring log bucket (`log_retention_days`). |
+| `github_role_permissions_boundary = "<arn>"` | Caps the GitHub deploy role with an IAM **permissions boundary** (defense in depth). |
+| `backend.tf.example` → `backend.tf` | **Remote state** in S3 with native locking (`use_lockfile`, Terraform ≥ 1.10). |
+
+Outputs `waf_web_acl_arn` and `access_logs_bucket` report the created resources
+when enabled.
+
+## Still your responsibility before real production
+
+- A **dedicated deploy account/role** separation and an approval gate on `apply`
+  (and on CI deploys — the sample workflow's `environment: production`).
+- Tag/cost allocation and your org's guardrails: SCPs, AWS Config rules, drift
+  detection.
+- A custom CDN domain + ACM cert if you don't want the `*.cloudfront.net` URL.

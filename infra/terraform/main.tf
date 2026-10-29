@@ -52,6 +52,26 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "assets" {
   }
 }
 
+# Versioning is kept for rollback, but old versions shouldn't pile up forever.
+# Expire noncurrent versions and clean up incomplete multipart uploads.
+resource "aws_s3_bucket_lifecycle_configuration" "assets" {
+  bucket = aws_s3_bucket.assets.id
+
+  rule {
+    id     = "expire-noncurrent-versions"
+    status = "Enabled"
+    filter {}
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.assets]
+}
+
 ##############################################################################
 # CloudFront — HTTPS in front of the private bucket via Origin Access Control.
 #

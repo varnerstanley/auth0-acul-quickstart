@@ -290,15 +290,27 @@ git push origin main      # or: Actions tab → "ACUL Deploy" → Run workflow
 ```
 
 A reference pipeline is in
-[`.github/workflows/acul-deploy.example.yml`](.github/workflows/acul-deploy.example.yml)
-(rename to `acul-deploy.yml` to activate). It:
+[`.github/workflows/acul-deploy.example.yml`](.github/workflows/acul-deploy.example.yml).
+**Copy it into _your_ ACUL project** (the one `auth0 acul init` generated and you
+designed) and rename it to `acul-deploy.yml` — that project has the
+`package.json` / `npm run build` / `dist/assets/…` this workflow needs. This
+quick-start repo is the guide + infrastructure; it has no app of its own. It:
 
 1. **builds** (`npm run build`),
 2. **syncs** `dist/` to S3 (immutable cache on content-hashed files),
 3. **logs in** the Auth0 CLI with the M2M credentials,
-4. **sets each screen** to advanced rendering with `head_tags` pointing at your
-   CloudFront URL — plus a `filters.includes_any` block if `RENDERING_CLIENT_IDS`
-   is set, so only those apps get the custom screens.
+4. **sets each screen** to advanced rendering — it **discovers** the real
+   content-hashed assets from `dist/` and writes `head_tags` pointing at your
+   CloudFront URL (never hardcoded filenames), plus a `filters.includes_any`
+   block if `RENDERING_CLIENT_IDS` is set so only those apps get the custom
+   screens.
+
+**Security built into the sample workflow:** OIDC into AWS (no long-lived keys),
+least-privilege `permissions`, third-party actions **pinned to commit SHAs**, a
+**pinned Auth0 CLI version**, `persist-credentials: false`, and a deploy
+`environment: production` you should gate with **required reviewers** (Settings →
+Environments) — put the `AUTH0_*` secrets in that environment so only approved
+runs can read them.
 
 The run summary lists each screen as *configured*.
 

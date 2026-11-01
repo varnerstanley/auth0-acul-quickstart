@@ -13,11 +13,16 @@ copying one folder and changing three values.*
 
 ## The hurdle this removes
 
-ACUL lets you render Auth0's login screen with your own React bundle — but the
-moment you leave local dev, people hit a wall:
+ACUL lets you render Auth0's login screen with your own React bundle. You build
+and test it locally with the Auth0 CLI — `auth0 acul dev`, and
+`auth0 acul dev --connected` for end‑to‑end against your tenant. The wall comes
+when you want a **shared, stable deploy** (teammates, other devices, a
+staging/production tenant). Two things trip people up:
 
-- A secure login page **can't load assets from `localhost`** (browsers block it),
-  so you must host the bundle on real HTTPS.
+- **It needs a durable HTTPS origin, not your laptop.** `localhost` is for your
+  own dev loop; a shareable/production login needs a stable URL that stays up
+  when your machine isn't. (Some newer browser versions also restrict loading
+  loopback assets on a live login page.)
 - ACUL loads as **ES modules**, which browsers always fetch *cross‑origin*, so
   your host has to return `Access-Control-Allow-Origin` for your Auth0 domain —
   or the scripts are silently blocked.

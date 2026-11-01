@@ -32,10 +32,17 @@ Universal Login. Auth0 loads your JS/CSS via `head_tags` that point at your CDN,
 and hands your code a context object (`window.universal_login_context`) with the
 transaction, screen, and client details.
 
-Two consequences drive this entire guide:
+You **develop locally** with the Auth0 CLI — `auth0 acul dev` (the mock-context
+inspector) and `auth0 acul dev --connected` (end-to-end against your tenant, with
+your assets served from a local port). That's the right loop while you're
+building. This guide is about the next step: a **shared, stable deploy** —
+teammates, other devices, a staging/production tenant. Two things shape it:
 
-1. **You must host the bundle over HTTPS.** Browsers block a secure login page
-   from loading `localhost` assets, so `localhost` is dev-only.
+1. **The assets need a durable HTTPS origin, not your laptop.** `localhost` is
+   for your own dev loop; a shareable/production login needs a stable URL that
+   stays up when your machine isn't. (Some newer browser versions also restrict
+   loading `localhost`/loopback assets on a live login page, so hosted assets are
+   the reliable path once you're past local dev.)
 2. **Your host must send CORS headers.** ACUL loads as ES modules, which are
    always fetched cross-origin — without `Access-Control-Allow-Origin` for your
    Universal Login domain, the scripts are blocked. This is why the Terraform
